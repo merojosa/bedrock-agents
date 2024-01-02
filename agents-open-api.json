@@ -1,0 +1,42 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Reports API",
+    "version": "1.0.0",
+    "description": "APIs for getting information about the current reports of Stonecastle."
+  },
+  "paths": {
+    "/reports": {
+      "get": {
+        "summary": "Get a list of all reports",
+        "description": "Get the list of all reports. Return all the reports with reportId and text",
+        "operationId": "getReportsTest",
+        "responses": {
+          "200": {
+            "description": "Gets the list of all reports for the customers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "reportId": {
+                        "type": "string",
+                        "description": "Unique ID of the report."
+                      },
+                      "text": {
+                        "type": "string",
+                        "description": "Content of the report"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
