@@ -191,7 +191,7 @@ function createAgent(stack: Stack, bedrockKbName: string) {
   new BedrockAgent(stack, `bedrock-agent-${CUSTOM_ID}`, {
     agentName: `bedrock-agent-${stack.stage}`,
     instruction:
-      "You are an assitant that answers any question from potencial or existing customers. Answer politely and with clarity.",
+      "You are an assistant that answers any question from potencial or existing customers. Answer politely and with clarity.",
     foundationModel: "anthropic.claude-v2:1",
     agentResourceRoleArn: agentResourceRoleArn,
     actionGroups: [
