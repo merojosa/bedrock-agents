@@ -4,7 +4,7 @@ import { BedrockAgentsStack } from "./stacks/bedrock-agents-stacks";
 export default {
   config(_input) {
     return {
-      name: "knowledge-base-lambda",
+      name: "bedrock-agent-lambda",
       region: "us-east-1",
     };
   },

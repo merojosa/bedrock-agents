@@ -81,7 +81,7 @@ function createKnowledgeBase(stack: Stack) {
           ],
         }
       ),
-      new iam.ManagedPolicy(stack, `bedrock-kb-${CUSTOM_ID}-secret-manager`, {
+      new iam.ManagedPolicy(stack, `bedrock-kb-secret-manager-${CUSTOM_ID}`, {
         statements: [
           new iam.PolicyStatement({
             effect: iam.Effect.ALLOW,
@@ -173,47 +173,110 @@ function createKnowledgeBase(stack: Stack) {
     },
   });
 
-  return { promptFunction, bedrockKbName } as const;
+  return {
+    promptFunction,
+    bedrockKbName,
+    bedrockKbArn: bedrockKb.knowledgeBaseArn,
+  } as const;
 }
 
-function createAgent(stack: Stack, bedrockKbName: string) {
+function createAgent(
+  stack: Stack,
+  bedrockKbArn: string,
+  bedrockKbName: string
+) {
+  const bucketArn = `arn:aws:s3:::${process.env.OPEN_API_BUCKET_NAME}`;
   const agentResourceRoleArn = new iam.Role(
     stack,
-    `bedrock-agent-role-${CUSTOM_ID}`,
+    `bedrock-agents-role-${CUSTOM_ID}`,
     {
+      roleName: `AmazonBedrockExecutionRoleForAgents_ba-${CUSTOM_ID}-${stack.stage}`,
+      description: "IAM role to create a Bedrock Agent",
       assumedBy: new iam.ServicePrincipal("bedrock.amazonaws.com"),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName("AdministratorAccess"),
+        new iam.ManagedPolicy(stack, `bedrock-agents-invoke-${CUSTOM_ID}`, {
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ["bedrock:InvokeModel"],
+              resources: [
+                "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-v2:1",
+              ],
+            }),
+          ],
+        }),
+        new iam.ManagedPolicy(
+          stack,
+          `bedrock-agents-s3-managed-policy-${CUSTOM_ID}`,
+          {
+            statements: [
+              new iam.PolicyStatement({
+                sid: "S3GetObjectStatement",
+                effect: iam.Effect.ALLOW,
+                actions: ["s3:GetObject"],
+                resources: [`${bucketArn}/*`],
+                conditions: {
+                  ["StringEquals"]: {
+                    "aws:ResourceAccount": stack.account,
+                  },
+                },
+              }),
+            ],
+          }
+        ),
+        new iam.ManagedPolicy(stack, `bedrock-agents-retrieve-${CUSTOM_ID}`, {
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ["bedrock:Retrieve"],
+              resources: [bedrockKbArn],
+            }),
+          ],
+        }),
       ],
     }
   ).roleArn;
 
+  const agentActionGroupFunction = new Function(
+    stack,
+    `agent-action-group-${CUSTOM_ID}`,
+    {
+      runtime: "python3.12",
+      handler: "packages/functions/src/agent-action-group/lambda.handler",
+      python: {
+        noDocker: true,
+      },
+      copyFiles: [{ from: getPyBundlePath("agent-action-group"), to: "./" }],
+    }
+  );
+
   new BedrockAgent(stack, `bedrock-agent-${CUSTOM_ID}`, {
     agentName: `bedrock-agent-${stack.stage}`,
     instruction:
-      "You are an assistant that answers any question from potencial or existing customers. Answer politely and with clarity.",
+      "You are an assistant that answers any question from potencial or existing customers. You must answer politely and with clarity.",
     foundationModel: "anthropic.claude-v2:1",
     agentResourceRoleArn: agentResourceRoleArn,
     actionGroups: [
       {
-        actionGroupName: "action-group-test",
-        actionGroupExecutor: "arn-lambda-test",
-        s3BucketName: "s3-open-api-schema",
-        s3ObjectKey: "open-api-schema",
+        actionGroupName: `action-group-${CUSTOM_ID}-${stack.stage}`,
+        actionGroupExecutor: agentActionGroupFunction.functionArn,
+        s3BucketName: process.env.OPEN_API_BUCKET_NAME ?? "",
+        s3ObjectKey: process.env.OPEN_API_BUCKET_KEY ?? "",
       },
     ],
     knowledgeBaseAssociations: [
       {
         knowledgeBaseName: bedrockKbName,
-        instruction: "This is general information",
+        instruction: "Enter the topics of your knowledge base",
       },
     ],
   });
 }
 
 export function BedrockAgentsStack({ stack }: StackContext) {
-  const { bedrockKbName, promptFunction } = createKnowledgeBase(stack);
-  createAgent(stack, bedrockKbName);
+  const { bedrockKbArn, bedrockKbName, promptFunction } =
+    createKnowledgeBase(stack);
+  createAgent(stack, bedrockKbArn, bedrockKbName);
 
   stack.addOutputs({
     promptUrl: promptFunction.url,
