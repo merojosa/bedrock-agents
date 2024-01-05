@@ -263,7 +263,7 @@ function createAgent(
     new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       actions: ["bedrock:InvokeAgent"],
-      resources: [agent.agentArn],
+      resources: ["*"],
     })
   );
 

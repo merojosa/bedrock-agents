@@ -1,7 +1,9 @@
 import boto3
 import json
+import uuid
 
 
+# https://docs.aws.amazon.com/code-library/latest/ug/python_3_bedrock-agent-runtime_code_examples.html
 def handler(event, context):
     print("Prompting...")
     bedrock_client = boto3.client(
@@ -17,26 +19,21 @@ def handler(event, context):
 
     print(input)
 
-    if (session_id is None):
-        response = bedrock_client.invoke_agent(
-            inputText=input,
-            endSession=False,
-            enableTrace=False,
-            agentId=agent_id,
-            agentAliasId=agent_alias_id,
-            sessionId="00"
-        )
-    else:
-        response = bedrock_client.retrieve_and_generate(
-            inputText=input,
-            endSession=False,
-            enableTrace=False,
-            agentId=agent_id,
-            agentAliasId=agent_alias_id,
-            sessionId=session_id,
-        )
+    # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agent-runtime/client/invoke_agent.html
+    response_stream = bedrock_client.invoke_agent(
+        inputText=input,
+        endSession=False,
+        enableTrace=False,
+        agentId=agent_id,
+        agentAliasId=agent_alias_id,
+        sessionId=str(uuid.uuid4()) if session_id is None else session_id,
+    )
 
-    print(response)
+    completion = ""
+
+    for event in response_stream.get("completion"):
+        chunk = event["chunk"]
+        completion = completion + chunk["bytes"].decode()
 
     return {
         "statusCode": 200,
@@ -44,6 +41,7 @@ def handler(event, context):
             "Content-Type": "application/json",
         },
         "body": {
-            "sessionId": response["sessionId"],
+            "sessionId": response_stream["sessionId"],
+            "text": completion
         },
     }
