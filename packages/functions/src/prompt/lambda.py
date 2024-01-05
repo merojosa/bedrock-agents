@@ -11,38 +11,32 @@ def handler(event, context):
 
     body = json.loads(event['body'])
     input = body.get('input')
+    agent_id = body.get("agentId")
+    agent_alias_id = body.get("agentAliasId")
     session_id = body.get("sessionId")
-    knowledge_base_id = body.get("knowledgeBaseId")
 
     print(input)
 
     if (session_id is None):
-        response = bedrock_client.retrieve_and_generate(
-            input={
-                'text': input
-            },
-            retrieveAndGenerateConfiguration={
-                'type': 'KNOWLEDGE_BASE',
-                'knowledgeBaseConfiguration': {
-                    'knowledgeBaseId': knowledge_base_id,
-                    'modelArn': 'arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-v2'
-                }
-            }
+        response = bedrock_client.invoke_agent(
+            inputText=input,
+            endSession=False,
+            enableTrace=False,
+            agentId=agent_id,
+            agentAliasId=agent_alias_id,
+            sessionId="00"
         )
     else:
         response = bedrock_client.retrieve_and_generate(
+            inputText=input,
+            endSession=False,
+            enableTrace=False,
+            agentId=agent_id,
+            agentAliasId=agent_alias_id,
             sessionId=session_id,
-            input={
-                'text': input
-            },
-            retrieveAndGenerateConfiguration={
-                'type': 'KNOWLEDGE_BASE',
-                'knowledgeBaseConfiguration': {
-                    'knowledgeBaseId': knowledge_base_id,
-                    'modelArn': 'arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-v2'
-                }
-            }
         )
+
+    print(response)
 
     return {
         "statusCode": 200,
@@ -50,8 +44,6 @@ def handler(event, context):
             "Content-Type": "application/json",
         },
         "body": {
-            "text": json.dumps(response["output"]["text"]),
             "sessionId": response["sessionId"],
-            "citations": response["citations"]
         },
     }

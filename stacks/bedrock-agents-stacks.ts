@@ -117,28 +117,6 @@ function createKnowledgeBase(stack: Stack) {
     },
   });
 
-  const promptFunction = new Function(stack, `bedrock-prompt-${CUSTOM_ID}`, {
-    runtime: "python3.12",
-    handler: "packages/functions/src/prompt/lambda.handler",
-    python: {
-      noDocker: true,
-    },
-    copyFiles: [{ from: getPyBundlePath("prompt"), to: "./" }],
-    url: true,
-    timeout: "1 minute",
-  });
-  promptFunction.addToRolePolicy(
-    new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        "bedrock:RetrieveAndGenerate",
-        "bedrock:Retrieve",
-        "bedrock:InvokeModel",
-      ],
-      resources: ["*"],
-    })
-  );
-
   const syncKnowledgeBaseFunction = new Function(
     stack,
     `sync-kb-${CUSTOM_ID}`,
@@ -174,7 +152,6 @@ function createKnowledgeBase(stack: Stack) {
   });
 
   return {
-    promptFunction,
     bedrockKbName,
     bedrockKbArn: bedrockKb.knowledgeBaseArn,
   } as const;
@@ -250,7 +227,7 @@ function createAgent(
     }
   );
 
-  new BedrockAgent(stack, `bedrock-agent-${CUSTOM_ID}`, {
+  const agent = new BedrockAgent(stack, `bedrock-agent-${CUSTOM_ID}`, {
     agentName: `bedrock-agent-${stack.stage}`,
     instruction:
       "You are an assistant that answers any question from potencial or existing customers. You must answer politely and with clarity.",
@@ -271,12 +248,31 @@ function createAgent(
       },
     ],
   });
+
+  const promptFunction = new Function(stack, `bedrock-prompt-${CUSTOM_ID}`, {
+    runtime: "python3.12",
+    handler: "packages/functions/src/prompt/lambda.handler",
+    python: {
+      noDocker: true,
+    },
+    copyFiles: [{ from: getPyBundlePath("prompt"), to: "./" }],
+    url: true,
+    timeout: "2 minute",
+  });
+  promptFunction.addToRolePolicy(
+    new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ["bedrock:InvokeAgent"],
+      resources: [agent.agentArn],
+    })
+  );
+
+  return { promptFunction } as const;
 }
 
 export function BedrockAgentsStack({ stack }: StackContext) {
-  const { bedrockKbArn, bedrockKbName, promptFunction } =
-    createKnowledgeBase(stack);
-  createAgent(stack, bedrockKbArn, bedrockKbName);
+  const { bedrockKbArn, bedrockKbName } = createKnowledgeBase(stack);
+  const { promptFunction } = createAgent(stack, bedrockKbArn, bedrockKbName);
 
   stack.addOutputs({
     promptUrl: promptFunction.url,
